@@ -21,3 +21,4 @@ Make the following changes to the programs to change them from python 2 to pytho
 
 5)
 Run the app from the piui folder using "python3 piui_demo.py"
+On the browser type "http://piui:9999" or "http://192.168.4.1:9999"
