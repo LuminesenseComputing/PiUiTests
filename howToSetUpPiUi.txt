@@ -1,0 +1,23 @@
+How to set up pi 4 server with piui:
+
+1) 
+Make the pi 4 a server using the instructions here: https://www.raspberrypi.org/documentation/configuration/wireless/access-point-routed.md
+Skip the section on "Enable routing and IP masquerading"
+
+2)
+Follow the instructions here under the "The do-it-yourself way": https://blog.singleton.io/posts/2013-03-20-introducing-piui/
+Instead of 192.168.1.1, use 192.168.4.1, since that is the IP address created in step 1.
+Do not yet run the app, as the python 2 code needs to be changed to python 3 to be compatible with modern day libraries.
+
+3)
+Run the following commands:
+"sudo pip3 install CherryPy"
+"sudo pip3 install urllib3"
+
+4)
+Make the following changes to the programs to change them from python 2 to python 3:
+-change the import statement in test_piui.py from urllib2 to urllib3
+-add brackets around the print statements in the __initi__.py and piui_demo.py programs
+
+5)
+Run the app from the piui folder using "python3 piui_demo.py"
