@@ -100,6 +100,7 @@ class DemoPiUi(object):
             self.indices[str(port)] = self.currentIndex
             self.currentIndex += 1
         elif signal == "ON" or signal=="CON_ON":
+            print("YAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAddddddddddd")
             self.changeLightText(port, "ON")
         elif signal =="OFF" or signal == "CON_OFF":
             self.changeLightText(port, "OFF")
@@ -155,10 +156,11 @@ class DemoPiUi(object):
         else:
             value = "OFF_COMMAND"
         self.lightCommandEvent(str(port)+":"+value)
+        self.changeLightText(port, "UNKNOWN")
 
     def changeLightText(self, port, text):
         index = self.indices[str(port)]
-        self.titles[index].set_text("Light "+str(port)+" " + text, "h2")
+        self.titles[index].set_text("Light "+str(port)+" " + text)
 
 #AN EXAMPLE OF A POTENTIAL FUNCTION THAT COULD BE USED FOR
 #SENDING WIFI MESSAGES FROM PIUI################
@@ -189,7 +191,7 @@ class lightModule:#CLASS THAT KEEPS TRACK OF THE STATUS OF A LIGHT AT A CERTAIN 
    #time.time goes past the max value and goes back to zero
    #OTHER FIXES:
    #instead of change state make it more precise control... ie option to turn on/off
-
+   #address already in use when starting up piui
     def changeState(self):#must add "turning on/off" states
         if self.state == 0:
             #self.state = 1
