@@ -268,44 +268,58 @@ class DemoPiUi(object):
 #######################################
 class lightModule:#CLASS THAT KEEPS TRACK OF THE STATUS OF A LIGHT AT A CERTAIN WIFI PORT
     def __init__(self, port):
-        self.state = 0 #0 is off, 1 is on, 2 is turning off, 3 is turning on
-        self.port = port
+        self.state = "OFF" #can be "OFF", "ON", "TURNING OFF", "TURNING ON"
+        self.port = port#MUST FIX SO THAT IT STARTS AT THE CORRECT STATE
         self.changeTime = 0
         print("    Light ", self.port, " is now ONLINE.")
 
-   #EDGE CASES TO TAKE CARE OF:
+   #EDGE CASES TO FIX:
    #trying to turn light on or off while it is in unknown state
    #time.time goes past the max value and goes back to zero
-   #OTHER FIXES:
-   #instead of change state make it more precise control... ie option to turn on/off
    #address already in use when starting up piui
-    def changeState(self):#must add "turning on/off" states
-        if self.state == 0:
+
+   #IMPORTANT ADDITIONS
+   #add in the name changing commands
+   #if the statenotchanged command keeps coming back confirm the correct state is being asked for, ie so that there is not an infinite loop because it is trying to turn on when the light is already on
+
+   #OTHER IMPROVEMENTS:
+   #instead of change state make it more precise control... ie option to turn on/off
+
+    def changeState(self):
+        if self.state == "OFF":
             #self.state = 1
-            self.state = 3
+            self.state = "TURNING ON"
             print("    Light ", self.port, " is now TURNING ON.")
-        elif self.state == 1:
+        elif self.state == "ON":
             #self.state = 0
-            self.state = 2
+            self.state = "TURNING OFF"
             print("    Light ", self.port, " is now TURNING OFF.")
         self.changeTime = time.time()
 
-    def confirmStateChange(self):#if no reply was received from the module for the original on/off command, then try again
+    def confirmStateChange(self):#if no reply was received from the module for the original on/off command, then try sending command again
         self.changeTime = time.time()#reset the time at which the state change was last attempted
-        if self.state == 3:
+        if self.state == "TURNING ON":
             print("    Light ", self.port, "turning on confirmation requested.")
-        elif self.state == 2:
+        elif self.state == "TURNING OFF":
             print("    Light ", self.port, "turning off confirmation requested.")
 
-    def finalizeChangeState(self):
-        if self.state == 3:
+    def finalizeStateChange(self):
+        if self.state == "TURNING ON":
             #self.state = 1
-            self.state = 1
+            self.state = "ON"
             print("    Light ", self.port, " is now ON.")
-        elif self.state == 2:
+        elif self.state == "TURNING OFF":
             #self.state = 0
-            self.state = 0
+            self.state = "OFF"
             print("    Light ", self.port, " is now OFF.")
+
+    def outOfSyncStateChange(self, forcedState):
+        if forcedState == "ON":
+            self.state = "ON"
+            print("    Light ", self.port, " is now FORCED ON, light module and piui were temporarily out of sync.")
+        elif forcedState == "OFF":
+            self.state = "OFF"
+            print("    Light ", self.port, " is now FORCED OFF, light module and piui were temporarily out of sync.")
 
     def closeLight(self):
         print("    Light ", self.port, "is now OFFLINE.")
@@ -326,8 +340,9 @@ def accept_wrapper(sock, lightModuleDict, receiveQueuey):
 def service_connection(key, mask, lightModuleDict, changeState, receiveQueuey, changePort):
     sock = key.fileobj
     data = key.data
-    lightModule = lightModuleDict[data.addr[1]]#the port of the currently serviced light module is data.addr[1]
-    if changeState == True and changePort == int(data.addr[1]): #if a state change has been for the current port by the queue
+    port = data.addr[1]
+    lightModule = lightModuleDict[port]#the port of the currently serviced light module is data.addr[1]
+    if changeState == True and changePort == int(port): #if a state change has been for the current port by the queue
         data.messages  += [b"CHANGE STATE"]
         lightModule.changeState()
 
@@ -339,38 +354,59 @@ def service_connection(key, mask, lightModuleDict, changeState, receiveQueuey, c
             recv_data = False#if read failed then close light
         if recv_data:
             print("received",repr(recv_data), "from", data.addr)
+           #IT WOULD ACTUALLY STILL BE GOOD TO HAVE AN IMMEDIATE CHECK OF CONFIRM STATE RIGHT AFTER THE LIGHT HAS BEEN CHANGED
+            '''
             if recv_data == b"TURNED ON":#confirmation that the light has turned on/off
                 lightModule.finalizeChangeState()
-                receiveQueuey.put(str(data.addr[1]) + ":" + "ON")
+                receiveQueuey.put(str(port) + ":" + "ON")
                 #data.outb += recv_data
             elif recv_data == b"TURNED OFF":
                 lightModule.finalizeChangeState()
-                receiveQueuey.put(str(data.addr[1]) + ":" + "OFF")
+                receiveQueuey.put(str(port) + ":" + "OFF")
             if recv_data == b"CONFIRMED ON":#confirmation that the light has turned on/off after a delayed response
                 lightModule.finalizeChangeState()
-                receiveQueuey.put(str(data.addr[1]) + ":" + "CON_ON")
+                receiveQueuey.put(str(port) + ":" + "CON_ON")
             elif recv_data == b"CONFIRMED OFF":
                 lightModule.finalizeChangeState()
-                receiveQueuey.put(str(data.addr[1]) + ":" + "CON_OFF")
+                receiveQueuey.put(str(port) + ":" + "CON_OFF")
+            '''
+            if recv_data == b"STATECHANGED_ON":
+                if lightModule.state == "TURNING ON":#if the piui thinks that the light is actually supposed to be turning on
+                    lightModule.finalizeStateChange()#FINISH ADDING ALL THE POSSIBILITIES HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+                elif lightModule.state == "TURNING OFF":
+                    lightModule.outOfSyncStateChange("ON")
+                receiveQueuey.put(str(port) + ":" + "ON")
+            elif recv_data == b"STATECHANGED_OFF":
+                if lightModule.state == "TURNING OFF":#if the piui thinks that the light is actually supposed to be turning off
+                    lightModule.finalizeStateChange()#FINISH ADDING ALL THE POSSIBILITIES HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+                elif lightModule.state == "TURNING ON":
+                    lightModule.outOfSyncStateChange("OFF")
+                receiveQueuey.put(str(port) + ":" + "OFF")
+            elif recv_data[0:15] == b"STATENOTCHANGED":
+                #if the current light responded saying it has not yet changed state, confirm status again
+                data.messages += [b"CONFIRM STATE"]
+                lightModule.confirmStateChange()
+
+
         else:
             lightModule.closeLight()
-            lightModuleDict.pop(data.addr[1])
+            lightModuleDict.pop(port)
             print("closing connection to", data.addr)
             sel.unregister(sock)
             sock.close()
-            receiveQueuey.put(str(data.addr[1]) + ":" + "CLOSED")
+            receiveQueuey.put(str(port) + ":" + "CLOSED")
 
     #if the current light has passed 2 seconds since attempting to turn on/off without response, confirm status
     if not data.messages: #must check to make sure the light was not just turned on or off
-        if lightModule.state == 3 and (time.time() - lightModule.changeTime) > 2:
-            data.messages += [b"CONFIRM ON"]
+        if lightModule.state == "TURNING ON" and (time.time() - lightModule.changeTime) > 2:
+            data.messages += [b"CONFIRM STATE"]
             lightModule.confirmStateChange()
-        elif lightModule.state == 2 and (time.time() - lightModule.changeTime) > 2:
-            data.messages += [b"CONFIRM OFF"]
+        elif lightModule.state == "TURNING OFF" and (time.time() - lightModule.changeTime) > 2:
+            data.messages += [b"CONFIRM STATE"]
             lightModule.confirmStateChange()
 
     #send any waiting messages to the light module
-j    if mask & selectors.EVENT_WRITE:
+    if mask & selectors.EVENT_WRITE:
         if not data.outb and data.messages:
             data.outb = data.messages.pop()
         if data.outb:
